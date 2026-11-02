@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "german-construction-tenders-gaeb": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@apify/actors-mcp-server",
+        "--tools",
+        "brsksr/german-construction-tenders-gaeb"
+      ],
+      "env": {
+        "APIFY_TOKEN": "YOUR_APIFY_TOKEN"
+      }
+    }
+  }
+}

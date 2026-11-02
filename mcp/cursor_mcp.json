@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "german-construction-tenders-gaeb": {
+      "url": "https://mcp.apify.com?tools=brsksr/german-construction-tenders-gaeb",
+      "headers": {
+        "Authorization": "Bearer YOUR_APIFY_TOKEN"
+      }
+    }
+  }
+}
