@@ -1,7 +1,49 @@
 {
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
   "name": "Daily German construction tenders with GAEB positions (Apify)",
+  "tags": [],
   "nodes": [
     {
+      "parameters": {
+        "content": "## Daily German construction tenders with GAEB positions (Apify)\n\n### How it works\n\nThis workflow runs automatically on weekdays at 07:00 to retrieve German public construction tenders (CPV 45) using the [German Construction Tenders + GAEB Extractor](https://apify.com/brsksr/german-construction-tenders-gaeb). It calls the Apify actor synchronously via HTTP to search directly inside GAEB Bills of Quantities (`.x83`, `.d83`, `.p83`), then formats the returned results into one item per tender with buyer, deadline, place of performance, GAEB position counts, and matching line-item excerpts.\n\n### Setup steps\n\n- Configure the schedule trigger with your desired weekday run time.\n- Get your Apify API token from [Apify Console -> Settings -> Integrations](https://console.apify.com/settings/integrations) and replace `YOUR_APIFY_TOKEN` in the **Post to Apify API** node URL.\n- Adjust `keywords` (e.g., `Wärmepumpe`, `Photovoltaik`, `Beton`) and optional `postalCodePrefixes` in the JSON body.\n- Connect your preferred output node (Slack, Teams, Email, or Google Sheets) after **Format Tender Details** and map `{{$json.message}}`.\n\n### Customization\n\nAdjust the schedule, Apify actor input parameters (`pubDaysBack`, `keywords`, `postalCodePrefixes`, `nutsPrefixes`, `maxTenders`), or formatting code to match your trade and region.",
+        "width": 480,
+        "height": 720
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        -160
+      ],
+      "id": "1e51e007-aa0c-48e9-b2d8-43300b628826",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Fetch and format tenders\n\nA compact left-to-right workflow cluster that triggers on weekday mornings, runs the Apify actor to collect German construction tenders, and formats the returned tender data for downstream use.",
+        "width": 672,
+        "height": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -160
+      ],
+      "id": "ce12a84f-7d7a-4db4-9cc9-dc415978ded7",
+      "name": "Sticky Note1"
+    },
+    {
+      "id": "70806984-6e88-590a-adf0-f99209669745",
+      "name": "Every Weekday at 7 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        0,
+        0
+      ],
       "parameters": {
         "rule": {
           "interval": [
@@ -12,96 +54,69 @@
           ]
         }
       },
-      "id": "70806984-6e88-590a-adf0-f99209669745",
-      "name": "Weekdays 07:00",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        0,
-        0
-      ]
+      "typeVersion": 1.2
     },
     {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.apify.com/v2/acts/brsksr~german-construction-tenders-gaeb/run-sync-get-dataset-items?token=YOUR_APIFY_TOKEN",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "{\n  \"pubDaysBack\": 1,\n  \"cpvPrefixes\": [\n    \"45\"\n  ],\n  \"keywords\": [\n    \"Wärmepumpe\",\n    \"Photovoltaik\"\n  ],\n  \"onlyWithGaeb\": true,\n  \"maxTenders\": 20\n}",
-        "options": {
-          "timeout": 310000
-        }
-      },
       "id": "bc12e37d-9b5e-5f6e-83bb-e784867bdd65",
-      "name": "Run Apify Actor (sync)",
+      "name": "Post to Apify API",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
       "position": [
         240,
         0
-      ]
+      ],
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/brsksr~german-construction-tenders-gaeb/run-sync-get-dataset-items?token=YOUR_APIFY_TOKEN",
+        "method": "POST",
+        "options": {
+          "timeout": 310000
+        },
+        "jsonBody": "{\n  \"pubDaysBack\": 1,\n  \"cpvPrefixes\": [\n    \"45\"\n  ],\n  \"keywords\": [\n    \"Wärmepumpe\",\n    \"Photovoltaik\"\n  ],\n  \"onlyWithGaeb\": true,\n  \"maxTenders\": 20\n}",
+        "sendBody": true,
+        "specifyBody": "json"
+      },
+      "typeVersion": 4.2
     },
     {
-      "parameters": {
-        "jsCode": "// One output item per tender: buyer, deadline, place of performance, number of GAEB positions and the\n// bill-of-quantities positions whose short/long text matched your keywords (with a text snippet).\nconst SNIPPET = 160; // characters of context around the keyword\n\nfunction snippet(text, keyword) {\n  if (!text) return '';\n  const flat = text.replace(/\\s+/g, ' ');\n  const i = flat.toLowerCase().indexOf(keyword.toLowerCase());\n  if (i < 0) return flat.slice(0, SNIPPET);\n  const start = Math.max(0, i - SNIPPET / 2);\n  return (start > 0 ? '…' : '') + flat.slice(start, start + SNIPPET) + (start + SNIPPET < flat.length ? '…' : '');\n}\n\nconst out = [];\nfor (const { json: t } of $input.all()) {\n  if (!t.title) continue; // empty run\n  const byOz = new Map((t.positions || []).map((p) => [p.oz, p]));\n  const hits = (t.keywordPositionHits || []).map((h) => {\n    const p = byOz.get(h.oz) || {};\n    const kw = h.keywords[0];\n    return {\n      oz: h.oz,\n      keywords: h.keywords.join(', '),\n      shortText: p.shortText || '',\n      quantity: p.quantity ?? null,\n      unit: p.unit || '',\n      excerpt: snippet(p.longText || p.shortText, kw),\n    };\n  });\n  const loc = t.location || {};\n  const place = [loc.postalCode, loc.city].filter(Boolean).join(' ') || loc.region || 'n/a';\n  const deadline = t.submissionDeadline\n    ? new Date(t.submissionDeadline).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })\n    : 'n/a';\n  const lines = hits.slice(0, 5).map(\n    (h) => `  • OZ ${h.oz}: ${h.shortText} (${h.quantity ?? '?'} ${h.unit}) – „${h.excerpt}“`,\n  );\n  out.push({\n    json: {\n      title: t.title,\n      buyer: t.buyer?.name || 'n/a',\n      deadline,\n      deadlineType: t.deadlineType,\n      place,\n      gaebPositions: t.positionCount,\n      matchedKeywords: (t.matchedKeywords || []).join(', '),\n      keywordHits: hits,\n      documentsUrl: t.documentsUrl,\n      message: [\n        `🏗️ ${t.title}`,\n        `Vergabestelle / Buyer: ${t.buyer?.name || 'n/a'}`,\n        `Frist / Deadline: ${deadline} · Ort / Place: ${place}`,\n        `GAEB-Positionen / BoQ positions: ${t.positionCount} · Keywords: ${(t.matchedKeywords || []).join(', ') || '–'}`,\n        ...lines,\n        `Unterlagen / Documents: ${t.documentsUrl}`,\n      ].join('\\n'),\n    },\n  });\n}\nreturn out;\n"
-      },
       "id": "9d801d8d-9d98-5018-89df-0cbc42fa21d5",
-      "name": "Format tenders",
+      "name": "Format Tender Details",
       "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
       "position": [
         480,
         0
-      ]
-    },
-    {
+      ],
       "parameters": {
-        "content": "## 🇬🇧 Daily German construction tenders with GAEB bill of quantities\n\n**1. Apify API token:** open the node **Run Apify Actor (sync)** and replace `YOUR_APIFY_TOKEN` in the URL with your token from https://console.apify.com/settings/integrations (better: store it as an n8n *Query Auth* credential with parameter `token`).\n\n**2. Keywords:** edit the JSON body of the same node, e.g. `\"keywords\": [\"Brandschutztür\", \"Gussasphalt\"]`. Keywords are searched in title, description **and every LV position** (short + long text).\n\n**3. Region (optional):** add `\"postalCodePrefixes\": [\"01\", \"04\"]` or `\"nutsPrefixes\": [\"DED\"]` (Saxony).\n\nThe run-sync endpoint waits up to 300 s. Narrow filters keep runs short; for very broad searches use the Apify node (\"Run Actor\" + \"Get dataset items\").\n\n---\n\n## 🇩🇪 Tägliche Bauausschreibungen mit GAEB-Leistungsverzeichnis\n\n**1. Apify-API-Token:** Im Knoten **Run Apify Actor (sync)** in der URL `YOUR_APIFY_TOKEN` durch Ihren Token ersetzen (https://console.apify.com/settings/integrations), besser als n8n-Credential *Query Auth* mit Parameter `token` hinterlegen.\n\n**2. Suchbegriffe:** Im JSON-Body desselben Knotens `\"keywords\"` anpassen, z. B. `[\"Brandschutztür\", \"Gussasphalt\"]`. Gesucht wird in Titel, Beschreibung **und allen LV-Positionen** (Kurz- und Langtext).\n\n**3. Region (optional):** `\"postalCodePrefixes\": [\"01\", \"04\"]` oder `\"nutsPrefixes\": [\"DED\"]` (Sachsen) ergänzen.\n\nAbrechnung nur für Ausschreibungen mit extrahierten GAEB-Positionen: https://apify.com/brsksr/german-construction-tenders-gaeb",
-        "height": 720,
-        "width": 620,
-        "color": 4
+        "jsCode": "// One output item per tender: buyer, deadline, place of performance, number of GAEB positions and the\n// bill-of-quantities positions whose short/long text matched your keywords (with a text snippet).\nconst SNIPPET = 160; // characters of context around the keyword\n\nfunction snippet(text, keyword) {\n  if (!text) return '';\n  const flat = text.replace(/\\s+/g, ' ');\n  const i = flat.toLowerCase().indexOf(keyword.toLowerCase());\n  if (i < 0) return flat.slice(0, SNIPPET);\n  const start = Math.max(0, i - SNIPPET / 2);\n  return (start > 0 ? '…' : '') + flat.slice(start, start + SNIPPET) + (start + SNIPPET < flat.length ? '…' : '');\n}\n\nconst out = [];\nfor (const { json: t } of $input.all()) {\n  if (!t.title) continue; // empty run\n  const byOz = new Map((t.positions || []).map((p) => [p.oz, p]));\n  const hits = (t.keywordPositionHits || []).map((h) => {\n    const p = byOz.get(h.oz) || {};\n    const kw = h.keywords[0];\n    return {\n      oz: h.oz,\n      keywords: h.keywords.join(', '),\n      shortText: p.shortText || '',\n      quantity: p.quantity ?? null,\n      unit: p.unit || '',\n      excerpt: snippet(p.longText || p.shortText, kw),\n    };\n  });\n  const loc = t.location || {};\n  const place = [loc.postalCode, loc.city].filter(Boolean).join(' ') || loc.region || 'n/a';\n  const deadline = t.submissionDeadline\n    ? new Date(t.submissionDeadline).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })\n    : 'n/a';\n  const lines = hits.slice(0, 5).map(\n    (h) => `  • OZ ${h.oz}: ${h.shortText} (${h.quantity ?? '?'} ${h.unit}) – „${h.excerpt}“`,\n  );\n  out.push({\n    json: {\n      title: t.title,\n      buyer: t.buyer?.name || 'n/a',\n      deadline,\n      deadlineType: t.deadlineType,\n      place,\n      gaebPositions: t.positionCount,\n      matchedKeywords: (t.matchedKeywords || []).join(', '),\n      keywordHits: hits,\n      documentsUrl: t.documentsUrl,\n      message: [\n        `🏗️ ${t.title}`,\n        `Vergabestelle / Buyer: ${t.buyer?.name || 'n/a'}`,\n        `Frist / Deadline: ${deadline} · Ort / Place: ${place}`,\n        `GAEB-Positionen / BoQ positions: ${t.positionCount} · Keywords: ${(t.matchedKeywords || []).join(', ') || '–'}`,\n        ...lines,\n        `Unterlagen / Documents: ${t.documentsUrl}`,\n      ].join('\\n'),\n    },\n  });\n}\nreturn out;\n"
       },
-      "id": "c009b2c1-992f-5f2a-935a-da5ec0f2db69",
-      "name": "Sticky Note: Setup",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -60,
-        -780
-      ]
+      "typeVersion": 2
     }
   ],
+  "pinData": {},
+  "settings": {
+    "timezone": "Europe/Berlin",
+    "executionOrder": "v1"
+  },
   "connections": {
-    "Weekdays 07:00": {
+    "Every Weekday at 7 AM": {
       "main": [
         [
           {
-            "node": "Run Apify Actor (sync)",
+            "node": "Post to Apify API",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Run Apify Actor (sync)": {
+    "Post to Apify API": {
       "main": [
         [
           {
-            "node": "Format tenders",
+            "node": "Format Tender Details",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
-  },
-  "settings": {
-    "executionOrder": "v1",
-    "timezone": "Europe/Berlin"
-  },
-  "pinData": {},
-  "meta": {
-    "templateCredsSetupCompleted": false
-  },
-  "tags": []
+  }
 }
