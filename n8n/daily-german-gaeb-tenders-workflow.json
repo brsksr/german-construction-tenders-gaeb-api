@@ -9,7 +9,7 @@
       "parameters": {
         "content": "## Daily German construction tenders with GAEB positions to Google Sheets and email (Apify)\n\n### How it works\n\nOn weekdays at 07:00 (Europe/Berlin) this workflow calls the [German Construction Tenders + GAEB Extractor](https://apify.com/brsksr/german-construction-tenders-gaeb) on Apify. The Actor loads new public construction tenders (CPV 45) from oeffentlichevergabe.de and searches inside their GAEB bills of quantities (`.x83`, `.d83`, `.p83`) for your keywords.\n\n1. **Filter** keeps only tenders with a title and at least one GAEB position.\n2. **Remove Duplicates** drops every tender already seen in an earlier execution, so the overlapping date window never causes a second alert.\n3. **Code** builds clean fields plus the matching bill-of-quantities positions with a text snippet.\n4. Each new tender is **appended to Google Sheets**, and all of them are **combined into one daily email**.\n\n### Setup steps\n\n- Replace `YOUR_APIFY_TOKEN` in the **Run Apify Actor** URL with your token from [Apify Console -> Settings -> Integrations](https://console.apify.com/settings/integrations).\n- In **Append to Google Sheets**, select your Google Sheets credential, replace `YOUR_GOOGLE_SHEET_ID` and create a header row: `noticeId, title, buyer, deadline, place, gaebPositions, keywords, firstHit, documentsUrl`.\n- In **Send Daily Email Digest**, select your Gmail credential and replace `YOUR_EMAIL@example.com`.\n\n### Customization\n\n- Change `keywords`, `cpvPrefixes`, `maxTenders` or add `postalCodePrefixes` / `nutsPrefixes` in the JSON body.\n- The window is 2 days (4 on Mondays, so Friday to Sunday are covered). Overlapping days are loaded and billed again by Apify; Remove Duplicates only prevents duplicate alerts.\n- Swap Gmail for Outlook, Slack or Microsoft Teams, or Google Sheets for Airtable or your CRM.",
         "width": 480,
-        "height": 760
+        "height": 900
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -40,14 +40,14 @@
       "parameters": {
         "content": "## 2. Enrich, log to Google Sheets & send daily digest\n\nFormat buyer, deadline, place and matching BoQ positions. Then append one row per new tender to Google Sheets and send all of them as one email.",
         "width": 700,
-        "height": 620,
+        "height": 580,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         840,
-        -320
+        -280
       ],
       "id": "703b16f7-57e3-5235-8ab1-cfdc3a8f5604",
       "name": "Sticky Note2"
