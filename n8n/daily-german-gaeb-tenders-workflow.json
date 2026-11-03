@@ -2,14 +2,14 @@
   "meta": {
     "templateCredsSetupCompleted": false
   },
-  "name": "Daily German construction tenders with GAEB positions (Apify)",
+  "name": "Daily German construction tenders with GAEB positions to Google Sheets and email (Apify)",
   "tags": [],
   "nodes": [
     {
       "parameters": {
-        "content": "## Daily German construction tenders with GAEB positions (Apify)\n\n### How it works\n\nThis workflow runs automatically on weekdays at 07:00 to retrieve German public construction tenders (CPV 45) using the [German Construction Tenders + GAEB Extractor](https://apify.com/brsksr/german-construction-tenders-gaeb). It calls the Apify actor synchronously via HTTP to search directly inside GAEB Bills of Quantities (`.x83`, `.d83`, `.p83`), then formats the returned results into one item per tender with buyer, deadline, place of performance, GAEB position counts, and matching line-item excerpts.\n\n### Setup steps\n\n- Configure the schedule trigger with your desired weekday run time.\n- Get your Apify API token from [Apify Console -> Settings -> Integrations](https://console.apify.com/settings/integrations) and replace `YOUR_APIFY_TOKEN` in the **Post to Apify API** node URL.\n- Adjust `keywords` (e.g., `Wärmepumpe`, `Photovoltaik`, `Beton`) and optional `postalCodePrefixes` in the JSON body.\n- Connect your preferred output node (Slack, Teams, Email, or Google Sheets) after **Format Tender Details** and map `{{$json.message}}`.\n\n### Customization\n\nAdjust the schedule, Apify actor input parameters (`pubDaysBack`, `keywords`, `postalCodePrefixes`, `nutsPrefixes`, `maxTenders`), or formatting code to match your trade and region.",
+        "content": "## Daily German construction tenders with GAEB positions to Google Sheets and email (Apify)\n\n### How it works\n\nOn weekdays at 07:00 (Europe/Berlin) this workflow calls the [German Construction Tenders + GAEB Extractor](https://apify.com/brsksr/german-construction-tenders-gaeb) on Apify. The Actor loads new public construction tenders (CPV 45) from oeffentlichevergabe.de and searches inside their GAEB bills of quantities (`.x83`, `.d83`, `.p83`) for your keywords.\n\n1. **Filter** keeps only tenders with a title and at least one GAEB position.\n2. **Remove Duplicates** drops every tender already seen in an earlier execution, so the overlapping date window never causes a second alert.\n3. **Code** builds clean fields plus the matching bill-of-quantities positions with a text snippet.\n4. Each new tender is **appended to Google Sheets**, and all of them are **combined into one daily email**.\n\n### Setup steps\n\n- Replace `YOUR_APIFY_TOKEN` in the **Run Apify Actor** URL with your token from [Apify Console -> Settings -> Integrations](https://console.apify.com/settings/integrations).\n- In **Append to Google Sheets**, select your Google Sheets credential, replace `YOUR_GOOGLE_SHEET_ID` and create a header row: `noticeId, title, buyer, deadline, place, gaebPositions, keywords, firstHit, documentsUrl`.\n- In **Send Daily Email Digest**, select your Gmail credential and replace `YOUR_EMAIL@example.com`.\n\n### Customization\n\n- Change `keywords`, `cpvPrefixes`, `maxTenders` or add `postalCodePrefixes` / `nutsPrefixes` in the JSON body.\n- The window is 2 days (4 on Mondays, so Friday to Sunday are covered). Overlapping days are loaded and billed again by Apify; Remove Duplicates only prevents duplicate alerts.\n- Swap Gmail for Outlook, Slack or Microsoft Teams, or Google Sheets for Airtable or your CRM.",
         "width": 480,
-        "height": 720
+        "height": 760
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -17,29 +17,46 @@
         -608,
         -160
       ],
-      "id": "1e51e007-aa0c-48e9-b2d8-43300b628826",
+      "id": "93eae260-3fc5-592a-8633-377c1e240cd9",
       "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## Fetch and format tenders\n\nA compact left-to-right workflow cluster that triggers on weekday mornings, runs the Apify actor to collect German construction tenders, and formats the returned tender data for downstream use.",
-        "width": 672,
-        "height": 320,
+        "content": "## 1. Fetch & deduplicate official notices\n\nWeekday trigger -> synchronous Apify Actor run -> keep valid tenders with GAEB positions -> drop tenders already seen in previous executions.",
+        "width": 840,
+        "height": 340,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -48,
+        -60,
         -160
       ],
-      "id": "ce12a84f-7d7a-4db4-9cc9-dc415978ded7",
+      "id": "1fbd76ac-9845-5608-99c4-a7445fe9851c",
       "name": "Sticky Note1"
     },
     {
-      "id": "70806984-6e88-590a-adf0-f99209669745",
-      "name": "Every Weekday at 7 AM",
+      "parameters": {
+        "content": "## 2. Enrich, log to Google Sheets & send daily digest\n\nFormat buyer, deadline, place and matching BoQ positions. Then append one row per new tender to Google Sheets and send all of them as one email.",
+        "width": 700,
+        "height": 620,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        840,
+        -320
+      ],
+      "id": "703b16f7-57e3-5235-8ab1-cfdc3a8f5604",
+      "name": "Sticky Note2"
+    },
+    {
+      "id": "d2567a05-e62c-5687-ba48-d213e47453b2",
+      "name": "Every Weekday at 07:00",
       "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
       "position": [
         0,
         0
@@ -49,45 +66,276 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 7 * * 1-5"
+              "expression": "0 0 7 * * 1-5"
             }
           ]
         }
-      },
-      "typeVersion": 1.2
+      }
     },
     {
-      "id": "bc12e37d-9b5e-5f6e-83bb-e784867bdd65",
-      "name": "Post to Apify API",
+      "id": "9e1ac2ea-5998-590d-a8d2-985f7838fdea",
+      "name": "Run Apify Actor",
       "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
-        240,
+        220,
         0
       ],
       "parameters": {
-        "url": "https://api.apify.com/v2/acts/brsksr~german-construction-tenders-gaeb/run-sync-get-dataset-items?token=YOUR_APIFY_TOKEN",
         "method": "POST",
+        "url": "https://api.apify.com/v2/acts/brsksr~german-construction-tenders-gaeb/run-sync-get-dataset-items?token=YOUR_APIFY_TOKEN",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"pubDaysBack\": {{ $now.setZone('Europe/Berlin').weekday === 1 ? 4 : 2 }},\n  \"cpvPrefixes\": [\"45\"],\n  \"keywords\": [\"Wärmepumpe\", \"Photovoltaik\"],\n  \"onlyWithGaeb\": true,\n  \"maxTenders\": 20\n}",
         "options": {
           "timeout": 310000
-        },
-        "jsonBody": "{\n  \"pubDaysBack\": 1,\n  \"cpvPrefixes\": [\n    \"45\"\n  ],\n  \"keywords\": [\n    \"Wärmepumpe\",\n    \"Photovoltaik\"\n  ],\n  \"onlyWithGaeb\": true,\n  \"maxTenders\": 20\n}",
-        "sendBody": true,
-        "specifyBody": "json"
-      },
-      "typeVersion": 4.2
+        }
+      }
     },
     {
-      "id": "9d801d8d-9d98-5018-89df-0cbc42fa21d5",
-      "name": "Format Tender Details",
-      "type": "n8n-nodes-base.code",
+      "id": "11bbd833-e0bd-560c-9212-33bb7fabc008",
+      "name": "Filter Valid Tenders",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
       "position": [
-        480,
+        440,
         0
       ],
       "parameters": {
-        "jsCode": "// One output item per tender: buyer, deadline, place of performance, number of GAEB positions and the\n// bill-of-quantities positions whose short/long text matched your keywords (with a text snippet).\nconst SNIPPET = 160; // characters of context around the keyword\n\nfunction snippet(text, keyword) {\n  if (!text) return '';\n  const flat = text.replace(/\\s+/g, ' ');\n  const i = flat.toLowerCase().indexOf(keyword.toLowerCase());\n  if (i < 0) return flat.slice(0, SNIPPET);\n  const start = Math.max(0, i - SNIPPET / 2);\n  return (start > 0 ? '…' : '') + flat.slice(start, start + SNIPPET) + (start + SNIPPET < flat.length ? '…' : '');\n}\n\nconst out = [];\nfor (const { json: t } of $input.all()) {\n  if (!t.title) continue; // empty run\n  const byOz = new Map((t.positions || []).map((p) => [p.oz, p]));\n  const hits = (t.keywordPositionHits || []).map((h) => {\n    const p = byOz.get(h.oz) || {};\n    const kw = h.keywords[0];\n    return {\n      oz: h.oz,\n      keywords: h.keywords.join(', '),\n      shortText: p.shortText || '',\n      quantity: p.quantity ?? null,\n      unit: p.unit || '',\n      excerpt: snippet(p.longText || p.shortText, kw),\n    };\n  });\n  const loc = t.location || {};\n  const place = [loc.postalCode, loc.city].filter(Boolean).join(' ') || loc.region || 'n/a';\n  const deadline = t.submissionDeadline\n    ? new Date(t.submissionDeadline).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })\n    : 'n/a';\n  const lines = hits.slice(0, 5).map(\n    (h) => `  • OZ ${h.oz}: ${h.shortText} (${h.quantity ?? '?'} ${h.unit}) – „${h.excerpt}“`,\n  );\n  out.push({\n    json: {\n      title: t.title,\n      buyer: t.buyer?.name || 'n/a',\n      deadline,\n      deadlineType: t.deadlineType,\n      place,\n      gaebPositions: t.positionCount,\n      matchedKeywords: (t.matchedKeywords || []).join(', '),\n      keywordHits: hits,\n      documentsUrl: t.documentsUrl,\n      message: [\n        `🏗️ ${t.title}`,\n        `Vergabestelle / Buyer: ${t.buyer?.name || 'n/a'}`,\n        `Frist / Deadline: ${deadline} · Ort / Place: ${place}`,\n        `GAEB-Positionen / BoQ positions: ${t.positionCount} · Keywords: ${(t.matchedKeywords || []).join(', ') || '–'}`,\n        ...lines,\n        `Unterlagen / Documents: ${t.documentsUrl}`,\n      ].join('\\n'),\n    },\n  });\n}\nreturn out;\n"
-      },
-      "typeVersion": 2
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "1a6dc2d9-23ed-5536-a683-50044d4feb8d",
+              "leftValue": "={{ $json.title }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "185f54a8-e1e7-5202-83f1-ee8c187fa077",
+              "leftValue": "={{ $json.noticeId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "4bc18d84-d712-5e0d-8fcf-4b286d0e478a",
+              "leftValue": "={{ $json.positionCount }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7c8caa80-14f7-5b1f-bad5-1c831ff63a93",
+      "name": "Remove Already Seen Tenders",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.noticeId }}",
+        "options": {
+          "historySize": 10000
+        }
+      }
+    },
+    {
+      "id": "5af16d28-b589-5016-b6fc-f6b88a0e007c",
+      "name": "Format Tender Details & Snippets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// One output item per tender: buyer, deadline, place of performance, number of GAEB positions and the\n// bill-of-quantities positions whose short/long text matched your keywords (with a text snippet).\nconst SNIPPET = 160; // characters of context around the keyword\n\nfunction snippet(text, keyword) {\n  if (!text) return '';\n  const flat = text.replace(/\\s+/g, ' ');\n  const i = flat.toLowerCase().indexOf(keyword.toLowerCase());\n  if (i < 0) return flat.slice(0, SNIPPET);\n  const start = Math.max(0, i - SNIPPET / 2);\n  return (start > 0 ? '…' : '') + flat.slice(start, start + SNIPPET) + (start + SNIPPET < flat.length ? '…' : '');\n}\n\nconst out = [];\nfor (const { json: t } of $input.all()) {\n  if (!t.title) continue; // empty run\n  const byOz = new Map((t.positions || []).map((p) => [p.oz, p]));\n  const hits = (t.keywordPositionHits || []).map((h) => {\n    const p = byOz.get(h.oz) || {};\n    const kw = h.keywords[0];\n    return {\n      oz: h.oz,\n      keywords: h.keywords.join(', '),\n      shortText: p.shortText || '',\n      quantity: p.quantity ?? null,\n      unit: p.unit || '',\n      excerpt: snippet(p.longText || p.shortText, kw),\n    };\n  });\n  const loc = t.location || {};\n  const place = [loc.postalCode, loc.city].filter(Boolean).join(' ') || loc.region || 'n/a';\n  const deadline = t.submissionDeadline\n    ? new Date(t.submissionDeadline).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })\n    : 'n/a';\n  const lines = hits.slice(0, 5).map(\n    (h) => `  • OZ ${h.oz}: ${h.shortText} (${h.quantity ?? '?'} ${h.unit}) – „${h.excerpt}“`,\n  );\n  out.push({\n    json: {\n      noticeId: t.noticeId,\n      title: t.title,\n      buyer: t.buyer?.name || 'n/a',\n      deadline,\n      deadlineType: t.deadlineType,\n      place,\n      gaebPositions: t.positionCount,\n      matchedKeywords: (t.matchedKeywords || []).join(', '),\n      firstHit: hits.length ? `OZ ${hits[0].oz}: ${hits[0].shortText} – ${hits[0].excerpt}` : '',\n      keywordHits: hits,\n      documentsUrl: t.documentsUrl,\n      message: [\n        `🏗️ ${t.title}`,\n        `Vergabestelle / Buyer: ${t.buyer?.name || 'n/a'}`,\n        `Frist / Deadline: ${deadline} · Ort / Place: ${place}`,\n        `GAEB-Positionen / BoQ positions: ${t.positionCount} · Keywords: ${(t.matchedKeywords || []).join(', ') || '–'}`,\n        ...lines,\n        `Unterlagen / Documents: ${t.documentsUrl}`,\n      ].join('\\n'),\n    },\n  });\n}\nreturn out;\n"
+      }
+    },
+    {
+      "id": "62628de1-24a3-515f-af6a-8793350e08a7",
+      "name": "Append to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1140,
+        -160
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "noticeId": "={{ $json.noticeId }}",
+            "title": "={{ $json.title }}",
+            "buyer": "={{ $json.buyer }}",
+            "deadline": "={{ $json.deadline }}",
+            "place": "={{ $json.place }}",
+            "gaebPositions": "={{ $json.gaebPositions }}",
+            "keywords": "={{ $json.matchedKeywords }}",
+            "firstHit": "={{ $json.firstHit }}",
+            "documentsUrl": "={{ $json.documentsUrl }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "noticeId",
+              "displayName": "noticeId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "buyer",
+              "displayName": "buyer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deadline",
+              "displayName": "deadline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "place",
+              "displayName": "place",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "gaebPositions",
+              "displayName": "gaebPositions",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "keywords",
+              "displayName": "keywords",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "firstHit",
+              "displayName": "firstHit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "documentsUrl",
+              "displayName": "documentsUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "0ce9cbac-88d4-59a1-886c-97dc50e679d2",
+      "name": "Combine Into Daily Digest",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        120
+      ],
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "message"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "71e93262-2889-5101-b193-fe150e356c7e",
+      "name": "Send Daily Email Digest",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1380,
+        120
+      ],
+      "parameters": {
+        "sendTo": "YOUR_EMAIL@example.com",
+        "subject": "=GAEB tenders {{ $now.setZone('Europe/Berlin').toFormat('dd.MM.yyyy') }}: {{ $json.message.length }} new construction tenders",
+        "emailType": "text",
+        "message": "={{ $json.message.join('\\n\\n────────────────────\\n\\n') }}",
+        "options": {
+          "appendAttribution": false
+        }
+      }
     }
   ],
   "pinData": {},
@@ -96,22 +344,71 @@
     "executionOrder": "v1"
   },
   "connections": {
-    "Every Weekday at 7 AM": {
+    "Every Weekday at 07:00": {
       "main": [
         [
           {
-            "node": "Post to Apify API",
+            "node": "Run Apify Actor",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Post to Apify API": {
+    "Run Apify Actor": {
       "main": [
         [
           {
-            "node": "Format Tender Details",
+            "node": "Filter Valid Tenders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Valid Tenders": {
+      "main": [
+        [
+          {
+            "node": "Remove Already Seen Tenders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Already Seen Tenders": {
+      "main": [
+        [
+          {
+            "node": "Format Tender Details & Snippets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Tender Details & Snippets": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Combine Into Daily Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Into Daily Digest": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Email Digest",
             "type": "main",
             "index": 0
           }

@@ -17,7 +17,7 @@ The extraction itself runs on Apify; you call it through the Apify API, n8n, Mak
 
 | Folder | What it is |
 |---|---|
-| [`n8n/`](n8n/daily-german-gaeb-tenders-workflow.json) | Importable **n8n Vergabe workflow**: every weekday 07:00, new tenders whose LV mentions your keywords |
+| [`n8n/`](n8n/daily-german-gaeb-tenders-workflow.json) | Importable end-to-end **n8n Vergabe workflow**: every weekday 07:00, new tenders whose LV mentions your keywords, deduplicated across runs, appended to Google Sheets and sent as one daily email digest |
 | [`mcp/`](mcp/README.md) | MCP configs for **Claude Desktop, Cursor, Claude Code and the OpenAI Agents SDK** + example prompts |
 | [`examples/`](examples/) | [`fetch_gaeb_tenders.py`](examples/fetch_gaeb_tenders.py) (GAEB positions as CSV, standard library only) and [`curl_quickstart.sh`](examples/curl_quickstart.sh) |
 
@@ -130,7 +130,7 @@ This run used no keywords. With `"keywords": ["Feuchtraumtür"]` the same tender
 
 - **Building material suppliers and manufacturers:** every tender whose LV specifies your product category, with quantities for lead scoring.
 - **Contractors and estimators:** pre-screen tenders by scope and import positions into your calculation software.
-- **n8n / Make / Zapier:** daily schedule → CRM, Slack, Teams, Google Sheets. Start with the [n8n template](n8n/daily-german-gaeb-tenders-workflow.json).
+- **n8n / Make / Zapier:** daily schedule → CRM, Slack, Teams, Google Sheets. Start with the [n8n template](n8n/daily-german-gaeb-tenders-workflow.json): Schedule → Apify → Filter → Remove Duplicates (across executions) → Code → Google Sheets + daily Gmail digest.
 - **AI agents (MCP):** let Claude, Cursor or an OpenAI agent answer questions such as *"Which tenders in Saxony need more than 200 m of railings?"* from real BoQ data. See [`mcp/`](mcp/README.md).
 
 ---
@@ -161,9 +161,11 @@ antwortet derzeit nicht auf Anfragen aus der Apify-Cloud; diese Ausschreibungen 
 ### Schnellstart
 
 - **n8n Vergabe Workflow:** [`n8n/daily-german-gaeb-tenders-workflow.json`](n8n/daily-german-gaeb-tenders-workflow.json) in n8n importieren
-  (*Workflows → Import from File*), Apify-Token in der URL des HTTP-Knotens eintragen, Suchbegriffe im JSON-Body anpassen.
-  Der Workflow läuft werktags um 7:00 Uhr und liefert je Ausschreibung Vergabestelle, Frist, Ort, Anzahl der GAEB-Positionen
-  und die Keyword-Treffer mit Textauszug aus dem Langtext, fertig für E-Mail, Slack oder CRM.
+  (*Workflows → Import from File*), Apify-Token in der URL des HTTP-Knotens eintragen, Suchbegriffe im JSON-Body anpassen,
+  Google-Sheets- und Gmail-Zugang auswählen sowie `YOUR_GOOGLE_SHEET_ID` und `YOUR_EMAIL@example.com` ersetzen.
+  Der Workflow läuft werktags um 7:00 Uhr, filtert gültige Ausschreibungen, entfernt bereits gemeldete (auch über mehrere
+  Läufe hinweg), schreibt je Ausschreibung eine Zeile in Google Sheets (Vergabestelle, Frist, Ort, GAEB-Positionen,
+  Keyword-Treffer mit Textauszug) und schickt alle neuen Treffer gesammelt in **einer** täglichen E-Mail.
 - **KI-Agenten (MCP):** Konfigurationen für Claude Desktop, Cursor, Claude Code und das OpenAI Agents SDK in [`mcp/`](mcp/README.md),
   inklusive Beispiel-Prompts wie *„Suche alle aktuellen Bauausschreibungen in Sachsen mit GAEB-Positionen für Brandschutztüren und erstelle eine Mengen-Tabelle.“*
 - **Python / cURL:** [`examples/`](examples/).
